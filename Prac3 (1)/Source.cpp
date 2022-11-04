@@ -172,7 +172,7 @@ vector<vector<float>> mascaraGx() {
 
 
 //  Muestra la direccion de los bordes para cada pixel dados los gradientes en x y y,
-vector<vector<float>> getEdgeAngles(Mat gx, Mat gy) {
+vector<vector<float>> obtenerAngulos(Mat gx, Mat gy) {
 	//Obtener la direccion
 	// m1 y m2 tienen dimensiones iguales
 	vector<vector<float>> angles(gx.rows, vector<float>(gx.cols, 0));
@@ -245,7 +245,7 @@ Mat aplicarEcualizacion(Mat m1, vector<int> Hv) {
 	}
 	return res;
 }
-Mat nonMaxSupression(Mat sobel, vector<vector<float>> angulos) {
+Mat nonMax(Mat sobel, vector<vector<float>> angulos) {
 	//Identificar maximo local en el gradiente
 	//Verificar si el pixel central es el maximo en su direccion 
 	int filas = sobel.rows;
@@ -297,7 +297,7 @@ Mat nonMaxSupression(Mat sobel, vector<vector<float>> angulos) {
 
 
 
-int intensidadMaxima(Mat img) {
+int obtenerIntensidadMaxima(Mat img) {
 	//Obtener el valor mas fuerte en toda la imagen
 	int filas = img.rows;
 	int columnas = img.cols;
@@ -315,34 +315,77 @@ int intensidadMaxima(Mat img) {
 	return max;
 }
 
-Mat hysteresis(Mat imgNonMaxSupr, float UmbralSuperiorPor, float UmbralInferiorPor) {
-	//Obtener bordes fuertes y los que no son tan notorios prescindir el valor
-	int filas = imgNonMaxSupr.rows;
-	int columnas = imgNonMaxSupr.cols;
 
-	Mat imgHysteresis(filas, columnas, CV_8UC1);
-
-	float UmbralSuperior, UmbralInferior;
-
-	UmbralSuperior = intensidadMaxima(imgNonMaxSupr) * UmbralSuperiorPor; 
-	UmbralInferior = UmbralSuperior * UmbralInferiorPor; 
-
-
-	for (int i = 0; i < filas; i++) {
-		for (int j = 0; j < columnas; j++) {
-		// si el pixel supera el umbral
-			if (imgNonMaxSupr.at<uchar>(Point(i, j)) >= UmbralSuperior) {
-				imgHysteresis.at<uchar>(Point(i, j)) = 255;
+int obtenerValorHisteresis(Mat imagen, int x, int y) {
+	int rows = imagen.rows;
+	int cols = imagen.cols;
+	// Denominamos amountSlide como la cantidad de casillas entre el centro de una matriz y uno de sus bordes
+	int amountSlide = 1;
+	float pix = imagen.at<uchar>(Point(x, y));
+	for (int i = -amountSlide; i <= amountSlide; i++)
+	{
+		for (int j = -amountSlide; j <= amountSlide; j++)
+		{
+			int tmpX = x + i;
+			int tmpY = y + j;
+			float tmp = 0;
+			// si el pixel con coordenadas (tmpX,tmpY) existe...
+			if (!(tmpX < 0 || tmpX >= cols || tmpY < 0 || tmpY >= rows)) {
+				tmp = imagen.at<uchar>(Point(tmpX, tmpY));
+				// si hay un vecino 8 conectado 
+				if (tmp == 255) {
+					return 255;
+				}
 			}
-			
+
+		}
+	}
+	return 0;
+}
+
+// aplica histeresis a una imagen despues de aplicar non max
+Mat histeresis(Mat img, float UmbralSuperior, float UmbralInferior) {
+	Mat img1(img.rows, img.cols, CV_8UC1);
+
+	UmbralSuperior = obtenerIntensidadMaxima(img) * UmbralSuperior;
+	UmbralInferior = UmbralSuperior * UmbralInferior;
+	int tmp = UmbralInferior;
+
+	Mat resultado(img.rows, img.cols, CV_8UC1);
+
+	for (int i = 0; i < img.rows; i++) {
+		for (int j = 0; j < img.cols; j++) {
+
+			if (img.at<uchar>(Point(i, j)) >= UmbralSuperior) {
+				img1.at<uchar>(Point(i, j)) = 255;
+			}
+			else if (UmbralInferior < img.at<uchar>(Point(i, j)) < UmbralSuperior) {
+				img1.at<uchar>(Point(i, j)) = UmbralInferior;
+			}
 			else {
-				imgHysteresis.at<uchar>(Point(i, j)) = 0;
+				img1.at<uchar>(Point(i, j)) = 0;
 			}
+			//asdfsfdsfd
 		}
 	}
 
-	return imgHysteresis;
+	for (int i = 0; i < img.rows; i++) {
+		for (int j = 0; j < img.cols; j++) {
+			// si el pixel es debil
+			if (img1.at<uchar>(Point(i, j)) == tmp) {
+					int v = obtenerValorHisteresis(img1, i, j);
+					resultado.at<uchar>(Point(i, j)) = uchar(v);	
+			}
+			else {
+				resultado.at<uchar>(Point(i, j)) = img1.at<uchar>(Point(i, j));
+			}
+
+		}
+	}
+
+	return resultado;
 }
+
 
 
 int main()
@@ -395,9 +438,9 @@ int main()
 	Mat geqGx = FiltroAMatriz(gaussianEq, gx);
 	Mat geqGy = FiltroAMatriz(gaussianEq, gy);
 	Mat geqG = obtenerMagnitud(geqGx, geqGy);
-	vector<vector<float>> angles2 = getEdgeAngles(geqGx, geqGy);
-	Mat nonmax2 = nonMaxSupression(geqG, angles2);
-	Mat hys2 = hysteresis(nonmax2, 0.9, 0.35);
+	vector<vector<float>> angles2 = obtenerAngulos(geqGx, geqGy);
+	Mat nonmax2 = nonMax(geqG, angles2);
+	Mat hys2 = histeresis(nonmax2, 0.9, 0.35);
 	//
 	namedWindow("Imagen original", WINDOW_AUTOSIZE);
 	imshow("Imagen original", imagen);
